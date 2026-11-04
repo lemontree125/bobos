@@ -1,0 +1,246 @@
+/* ═══════════════════════════════════════════════════════════════
+   Memory Glass — 플러그인 공통 디자인 시스템 (정본)
+   (@memory.editor 제품군 · 확장 ID는 기술적으로 com.haru.* 유지)
+   기준 구현: LinkImport index.html (2026-08-09 적용)
+
+   사용법:
+   1) 이 파일을 새 플러그인의 index.html <style>에 복사(인라인이 기본 패턴)
+   2) --mg-accent 4종만 제품 색으로 교체 (memory-glass.md의 제품별 표 참조)
+   3) blur 예산: backdrop-filter는 패널당 최대 4곳 (프리미어와 GPU 공유)
+
+   ⚠️ CEP = Chromium 99. 이후 문법은 에러 없이 조용히 무시됨:
+      CSS nesting · :has() · @container · color-mix() · oklch()
+      · text-wrap: balance · subgrid · @scope
+   ═══════════════════════════════════════════════════════════════ */
+
+:root {
+  /* 잉크 (글자) */
+  --mg-ink: #dbe2ee;
+  --mg-ink-strong: #eef3fb;
+  --mg-ink-dim: rgba(219, 226, 238, 0.5);
+  --mg-ink-faint: rgba(219, 226, 238, 0.35);
+
+  /* 유리 표면 — 3단계 명도 위계 */
+  --mg-glass: rgba(255, 255, 255, 0.045);      /* 카드·행 */
+  --mg-glass-2: rgba(255, 255, 255, 0.065);    /* 컨트롤(버튼·셀렉트) */
+  --mg-glass-3: rgba(255, 255, 255, 0.10);     /* 호버 */
+  --mg-line: rgba(255, 255, 255, 0.09);        /* 기본 테두리 */
+  --mg-line-2: rgba(255, 255, 255, 0.14);      /* 컨트롤 테두리 */
+  --mg-line-3: rgba(255, 255, 255, 0.22);      /* 호버 테두리 */
+  --mg-hl: inset 0 1px rgba(255, 255, 255, 0.08);  /* 유리 상단 하이라이트 */
+
+  /* 상태색 (전 제품 공통 — 바꾸지 말 것) */
+  --mg-ok: #7ed6a2;
+  --mg-err: #ff8383;
+  --mg-warn: #e8c96f;
+
+  /* 액센트 — 제품별로 이 4개만 교체 */
+  --mg-accent: #2d8ceb;                         /* 원색 */
+  --mg-accent-soft: rgba(45, 140, 235, 0.26);   /* 채움(primary 버튼·선택) */
+  --mg-accent-line: rgba(93, 169, 240, 0.55);   /* 테두리·포커스 링 */
+  --mg-accent-glow: rgba(45, 140, 235, 0.21);   /* 배경 광원 */
+  --mg-accent2-glow: rgba(23, 195, 178, 0.12);  /* 보조 광원(하단, 청록 계열 유지 권장) */
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+
+/* ── 패널 배경: 다크 네이비 그라디언트 + 광원 2개 + 필름 그레인.
+      패널은 호스트 위로 투명해질 수 없으므로 유리 뒤 배경을 패널 안에 만든다 ── */
+body {
+  background-color: #0d1017;
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.04'/></svg>"),
+    radial-gradient(circle at 92% -6%, var(--mg-accent-glow), transparent 36%),
+    radial-gradient(circle at -8% 106%, var(--mg-accent2-glow), transparent 38%),
+    linear-gradient(152deg, #131725 0%, #111423 55%, #0d1017 100%);
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat;
+  background-size: 140px 140px, auto, auto, auto;
+  color: var(--mg-ink);
+  font-family: "Segoe UI", "Malgun Gothic", sans-serif;
+  font-size: 12px;
+  overflow: hidden;
+}
+
+/* ── 스크롤바 ── */
+::-webkit-scrollbar { width: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.24); }
+
+/* ── 버튼: 유리 칩. radius 8 · 상단 하이라이트 · 호버 시 밝아짐 ── */
+button {
+  background: var(--mg-glass-2);
+  border: 1px solid var(--mg-line-2);
+  border-radius: 8px;
+  color: #d9e0ec;
+  padding: 5px 10px;
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: var(--mg-hl);
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+button:hover:not(:disabled) { background: var(--mg-glass-3); border-color: var(--mg-line-3); }
+button:disabled { opacity: 0.35; cursor: default; }
+.primary {
+  background: var(--mg-accent-soft);
+  border-color: var(--mg-accent-line);
+  color: var(--mg-ink-strong);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.14), 0 4px 14px var(--mg-accent-glow);
+}
+.primary:hover:not(:disabled) { border-color: var(--mg-accent); }
+
+/* ── 셀렉트 ── */
+select {
+  background: var(--mg-glass-2);
+  border: 1px solid var(--mg-line-2);
+  border-radius: 7px;
+  color: #d9e0ec;
+  padding: 3px 5px;
+  font-size: 11px;
+  outline: none;
+}
+select option { background: #161a26; color: #d9e0ec; }
+
+img { background: rgba(0, 0, 0, 0.35); }
+
+/* ── 주 입력줄(옴니박스형): radius 11 · blur 사용처 1/4 ── */
+.mg-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 11px;
+  padding: 0 10px;
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12), 0 10px 26px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.mg-input:focus-within {
+  border-color: var(--mg-accent-line);
+  box-shadow: 0 0 0 2px var(--mg-accent-glow), inset 0 1px rgba(255, 255, 255, 0.12), 0 10px 26px rgba(0, 0, 0, 0.25);
+}
+.mg-input input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--mg-ink-strong);
+  font-size: 12px;
+  padding: 9px 0;
+  font-family: inherit;
+}
+.mg-input input::placeholder { color: var(--mg-ink-faint); }
+
+/* ── 유리 카드(목록 행·정보 블록): radius 10 · blur 안 씀(정적 배경 위라 불필요) ── */
+.mg-card {
+  padding: 8px 10px;
+  margin: 3px 10px;
+  border-radius: 10px;
+  background: var(--mg-glass);
+  border: 1px solid var(--mg-line);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.06);
+  transition: background 0.15s, border-color 0.15s;
+}
+.mg-card:hover { background: rgba(255, 255, 255, 0.075); border-color: var(--mg-line-2); }
+/* 강조 카드(액션카드 등): blur 사용처 2/4 */
+.mg-card-hero {
+  margin: 2px 10px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.09), 0 14px 32px rgba(0, 0, 0, 0.30);
+}
+
+/* ── 세그먼트 토글 ── */
+.mg-seg {
+  display: flex;
+  border: 1px solid var(--mg-line-2);
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+.mg-seg span {
+  padding: 4px 11px;
+  font-size: 11px;
+  color: rgba(219, 226, 238, 0.6);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.mg-seg span + span { border-left: 1px solid rgba(255, 255, 255, 0.10); }
+.mg-seg span.on {
+  background: var(--mg-accent-soft);
+  color: var(--mg-ink-strong);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.12);
+}
+
+/* ── 섹션 헤더 ── */
+.mg-sec {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: rgba(219, 226, 238, 0.42);
+  padding: 10px 14px 5px;
+}
+
+/* ── 진행바: 액센트→청록 그라디언트 + 글로우 ── */
+.mg-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.09);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.mg-bar > div {
+  height: 100%; width: 0%;
+  background: linear-gradient(90deg, var(--mg-accent), #35c6d8);
+  border-radius: 3px;
+  box-shadow: 0 0 8px var(--mg-accent-line);
+  transition: width 0.2s;
+}
+
+/* ── 하단 상태줄: blur 사용처 3/4 ── */
+.mg-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--mg-ink-dim);
+  padding: 7px 12px;
+  background: var(--mg-glass);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.mg-status.err { color: var(--mg-err); }
+
+/* ── 전면 오버레이(미리보기·모달): blur 사용처 4/4 — 이 시스템의 하이라이트 ── */
+.mg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 14, 21, 0.72);
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  display: none;
+  flex-direction: column;
+  z-index: 100;
+  padding: 10px 12px;
+  gap: 8px;
+}
+.mg-overlay.on { display: flex; }
+
+/* ── 상태 텍스트 ── */
+.mg-ok { color: var(--mg-ok); }
+.mg-err { color: var(--mg-err); }
+.mg-warn { color: var(--mg-warn); }

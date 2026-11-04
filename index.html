@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bobos</title>
+  <link rel="stylesheet" href="css/memory-glass.css">
+  <link rel="stylesheet" href="css/bobos.css">
+</head>
+<body>
+  <!-- Bobos = 링크 임포트(구 Link Import) + 트래킹(구 Pin) 한 패널 두 탭.
+       키가 확인되기 전엔 #gate만 보이고, 탭 코드(js/linkimport.js · js/pin.js)는 탭을 처음 열 때 app.js가 불러온다. -->
+
+  <!-- ===== 키 등록 화면 ===== -->
+  <div id="gate" class="bb-gate" hidden>
+    <div class="bb-gate-card">
+      <div class="bb-word">BOBOS</div>
+      <div class="bb-gate-title">처음 한 번만 키를 등록해 주세요</div>
+      <div class="bb-gstep"><span class="bb-num">1</span><span>아래 <b>기기 코드</b>를 복사해서 Bobos를 준 사람에게 보내 주세요.</span></div>
+      <div class="bb-code"><code id="gate-device">확인 중…</code><button id="gate-copy" type="button">복사</button></div>
+      <div class="bb-gstep"><span class="bb-num">2</span><span>답장으로 받은 <b>키</b>를 붙여 넣고 [등록]을 누르세요.</span></div>
+      <textarea id="gate-key" rows="4" spellcheck="false" placeholder="BOBOS-로 시작하는 키를 붙여 넣기"></textarea>
+      <button id="gate-ok" type="button" class="primary wide">등록</button>
+      <p id="gate-msg" class="bb-gate-msg" role="status" aria-live="polite"></p>
+      <p class="bb-gate-foot">키는 이 컴퓨터에서만 쓸 수 있어요. 다른 컴퓨터에서는 그 컴퓨터의 기기 코드로 새 키를 받아야 해요.</p>
+    </div>
+  </div>
+
+  <!-- ===== 본 화면 ===== -->
+  <div id="app" class="bb-app" hidden>
+    <header class="bb-top">
+      <span class="bb-word">BOBOS</span>
+      <nav class="bb-tabs" role="tablist">
+        <button type="button" class="bb-tab" data-tab="li" role="tab">링크 임포트</button>
+        <button type="button" class="bb-tab" data-tab="pin" role="tab">트래킹</button>
+        <button type="button" class="bb-tab" data-tab="sfx" role="tab">효과음</button>
+      </nav>
+      <button id="log-btn" type="button" class="ghost" hidden title="트래킹 진단 로그 폴더를 열어요 (문의할 때 pin-log.txt를 보내 주세요)">로그</button>
+      <button id="owner" type="button" class="bb-owner" title="키 정보"></button>
+    </header>
+
+    <!-- 키 정보 창: 머리의 "○○님 전용"을 누르면 열림 -->
+    <div id="keyPop" class="bb-pop" hidden>
+      <div class="bb-pop-row"><span class="k">사용자</span><span id="kp-name" class="v"></span></div>
+      <div class="bb-pop-row"><span class="k">기기 코드</span><span id="kp-device" class="v mono"></span></div>
+      <div class="bb-pop-row"><span class="k">발급일</span><span id="kp-date" class="v"></span></div>
+      <p class="bb-pop-note">PC를 다른 사람에게 넘기거나 팔 때 키를 지워 주세요. 지우면 이 PC에서 다시 쓰려면 키를 새로 넣어야 해요.</p>
+      <div class="bb-pop-acts">
+        <button id="kp-delete" type="button" class="bb-danger">키 삭제</button>
+        <button id="kp-close" type="button">닫기</button>
+      </div>
+    </div>
+
+    <!-- ===== 탭 1: 링크 임포트 ===== -->
+    <section id="tab-li" class="bb-pane" hidden>
+      <div class="omni-zone">
+        <div class="mg-input">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" style="color:rgba(219,226,238,.45)"><circle cx="5" cy="5" r="3.6"/><path d="M8 8l3 3"/></svg>
+          <input id="omni" type="text" placeholder="링크 붙여넣기 또는 유튜브 검색" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="dest-bar">
+        <span class="lbl">보낼 곳</span>
+        <div class="mg-seg" id="destSeg">
+          <span id="destTimeline" class="on">타임라인</span>
+          <span id="destProject">프로젝트만</span>
+        </div>
+        <span class="lbl">V</span><select id="vTrack"></select>
+        <span class="lbl">A</span><select id="aTrack"></select>
+        <button id="btnRefreshSeq" title="시퀀스 정보 새로고침"><svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M10.5 6a4.5 4.5 0 1 1-1.3-3.2"/><path d="M10.7 0.8v2.4H8.3" stroke-linejoin="round"/></svg></button>
+        <span id="seqName">시퀀스 없음</span>
+      </div>
+
+      <div id="actionCard">
+        <div class="ac-head sec-head">
+          <span class="ac-label">가져오기 방식</span>
+          <span class="x" id="acClose">닫기</span>
+        </div>
+        <div class="ac-media">
+          <img id="acThumb" alt="">
+          <div class="ac-info">
+            <div class="ac-title" id="acTitle">정보 가져오는 중…</div>
+            <div class="ac-meta" id="acMeta"></div>
+          </div>
+        </div>
+        <div class="ac-acts">
+          <button id="acVideo" class="primary">비디오</button>
+          <button id="acAudio">오디오</button>
+          <button id="acSection">구간 지정...</button>
+        </div>
+      </div>
+
+      <div id="content">
+        <div id="searchWrap">
+          <div class="sec-head"><span id="searchHead">검색 결과</span><span class="x" id="searchClose">닫기</span></div>
+          <div id="results"></div>
+        </div>
+        <div class="sec-head" id="jobsHead" style="display:none"><span>다운로드</span></div>
+        <div id="jobs" style="display:flex; flex-direction:column;"></div>
+        <div id="liEmpty" class="li-empty">
+          <b>링크를 붙여 넣거나 검색어를 입력하세요</b>
+          유튜브 · 인스타그램 · 틱톡 링크 → 비디오/오디오/구간 선택<br>
+          검색어 + Enter → 유튜브 검색<br>
+          ※ 프로젝트(.prproj)를 먼저 저장해야 받을 수 있어요
+        </div>
+      </div>
+
+      <div class="status">
+        <span id="statusText">준비 중…</span>
+        <span class="clear" id="btnClearHistory">기록 지우기</span>
+      </div>
+
+      <div id="previewOverlay" class="mg-overlay">
+        <div id="previewStatus">미리보기 스트림 불러오는 중…</div>
+        <video id="previewVideo" controls></video>
+        <div id="pvBar" title="클릭하면 해당 위치로 이동">
+          <div id="pvSel"></div>
+          <div id="pvHead"></div>
+        </div>
+        <div class="section-bar">
+          <span class="sec-label">구간</span>
+          <button id="btnSecStart">시작점 <b>I</b></button>
+          <button id="btnSecEnd">끝점 <b>O</b></button>
+          <span id="secDisplay">전체</span>
+          <button id="btnSecClear">지우기</button>
+        </div>
+        <div id="previewBtns">
+          <button id="btnPvVideo" class="primary">비디오 다운로드</button>
+          <button id="btnPvAudio">오디오만</button>
+          <button id="btnPvBrowser">브라우저</button>
+          <button id="btnPvClose">닫기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 탭 2: 트래킹 ===== -->
+    <section id="tab-pin" class="bb-pane" hidden>
+      <div class="mode">
+        <div class="seg" role="radiogroup" aria-label="동작">
+          <label title="자막·이미지 클립이 핀 꽂은 부분을 따라다녀요"><input id="mode-follow" name="mode" type="radio" checked><span>따라가기</span></label>
+          <label title="핀 꽂은 피사체를 화면 한 자리에 붙잡아 둬요 — 영상 클립 자체를 움직여서 배경이 대신 움직여요"><input id="mode-lock" name="mode" type="radio"><span>고정</span></label>
+        </div>
+        <p id="mode-desc" class="mode-desc"></p>
+      </div>
+
+      <main class="steps">
+        <section id="step1" class="step">
+          <div class="step-head"><span class="num">1</span><span class="step-title">클립 불러오기</span><button id="refresh-btn" type="button" class="ghost mini" hidden title="타임라인 선택과 재생 헤드 위치를 다시 읽어요">다시 불러오기</button></div>
+          <ul id="how-follow" class="how">
+            <li>타임라인에서 <b>영상</b>과 따라갈 <b>자막·이미지</b>를 함께 선택</li>
+            <li>재생 헤드를 핀 꽂을 <b>장면</b>에 두기</li>
+          </ul>
+          <ul id="how-lock" class="how" hidden>
+            <li>고정할 <b>영상 클립 하나만</b> 선택</li>
+            <li>재생 헤드를 기준 <b>장면</b>에 두기 — 피사체가 이 장면의 자리에 머물러요</li>
+          </ul>
+          <div id="clips" class="clips" hidden>
+            <div class="kv"><span class="k">영상</span><span id="c-src" class="v"></span><span id="c-speed" class="tag" hidden title="속도를 바꾼 클립 — 키프레임 간격을 속도에 맞춰 넣어요"></span></div>
+            <div id="c-tgt-row" class="kv"><span class="k">대상</span><span id="c-tgt" class="v"></span></div>
+          </div>
+          <button id="load-btn" type="button" class="primary wide">선택한 클립 불러오기</button>
+          <button id="ff-btn" type="button" class="primary wide" hidden>ffmpeg 설치</button>
+          <p id="msg1" class="msg" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="step2" class="step">
+          <div class="step-head"><span class="num">2</span><span class="step-title">핀 꽂기</span>
+            <span class="head-opts"><span class="opt-label">맞추기</span>
+              <label class="pill sm" title="켜면 핀을 2개 꽂아요. 두 핀 사이가 벌어지면 커진 것 — 따라가기는 자막도 같이 커지고, 고정은 피사체 크기를 일정하게 유지해요. 변화 8% 미만이면 안 씀"><input id="with-scale" type="checkbox"><span>크기</span></label>
+              <label class="pill sm" title="켜면 핀을 2개 꽂아요. 두 핀을 잇는 선이 기울어지는 만큼 회전 — 고정에선 반대로 돌려 기울기를 잡아요. 3° 미만이면 안 씀"><input id="with-rot" type="checkbox"><span>회전</span></label>
+            </span>
+          </div>
+          <div id="placeholder" class="placeholder">클립을 불러오면 재생 헤드 위치의 장면이 여기 떠요</div>
+          <div id="stage" class="stage" hidden>
+            <span id="tc" class="tc" title="이 장면(재생 헤드 위치)이 기준이에요 — 여기서 꽂은 핀 자리가 출발점"></span>
+            <div id="view" class="view">
+              <img id="frame" alt="" draggable="false">
+              <canvas id="box"></canvas>
+            </div>
+            <div class="zoom-ctl" role="group" aria-label="미리보기 확대" title="작은 핀포인트를 볼 때. Ctrl+휠(맥은 ⌘+휠·트랙패드 핀치)로 커서 기준 확대, 확대 중엔 휠로 스크롤"><button id="zoom-out" type="button" class="ghost" disabled>−</button><button id="zoom-reset" type="button" class="ghost" title="원래 크기로">100%</button><button id="zoom-in" type="button" class="ghost">+</button></div>
+          </div>
+          <p id="msg2" class="msg" role="status" aria-live="polite"></p>
+        </section>
+
+        <section id="step3" class="step">
+          <div class="step-head"><span class="num">3</span><span class="step-title">실행</span></div>
+          <div class="row">
+            <span class="row-label">범위</span>
+            <div class="seg sm" role="radiogroup" aria-label="범위">
+              <label title="영상과 대상이 겹치는 구간 전체 (재생 헤드에서 앞뒤 양쪽으로)"><input id="range-all" name="range" type="radio" checked><span>전체</span></label>
+              <label title="재생 헤드부터 끝까지만 다시 추적하고, 앞쪽 키는 그대로 둬요. 중간에 핀이 빗나갔을 때 그 지점부터 다시 잡는 용도"><input id="fwd-only" name="range" type="radio"><span>재생 헤드 뒤만</span></label>
+            </div>
+          </div>
+          <div id="fill-row" class="row" hidden>
+            <span class="row-label">가장자리</span>
+            <label class="pill" title="고정하면 밀려난 반대쪽 가장자리가 비어요. 켜면 비지 않을 만큼만 영상을 확대해요 (최대 300%). 4K를 1080p에 얹은 것처럼 여유가 있으면 확대하지 않아요"><input id="fill-edges" type="checkbox" checked><span>빈 곳 채우기(확대)</span></label>
+          </div>
+          <button id="run-btn" type="button" class="primary wide run" disabled>따라가기 실행</button>
+          <p id="msg3" class="msg" role="status" aria-live="polite"></p>
+        </section>
+      </main>
+    </section>
+
+    <!-- ===== 탭 3: 효과음 ===== -->
+    <section id="tab-sfx" class="bb-pane" hidden>
+      <div class="sfx-top">
+        <div class="mg-input">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" style="color:rgba(219,226,238,.45)"><circle cx="5" cy="5" r="3.6"/><path d="M8 8l3 3"/></svg>
+          <input id="sfxQ" type="text" placeholder="효과음 검색 (예: 띠용, 슉, 박수)" spellcheck="false">
+          <span id="sfxClear" class="sfx-x" hidden title="지우기">✕</span>
+        </div>
+        <div id="sfxChips" class="sfx-chips"></div>
+      </div>
+      <div class="sfx-folders">
+        <div id="sfxFolderList" class="sfx-flist"></div>
+        <button id="sfxAdd" type="button" class="ghost mini" title="효과음이 들어 있는 폴더를 추가해요 (하위 폴더까지 읽음)">+ 폴더</button>
+        <button id="sfxAddFile" type="button" class="ghost mini" title="효과음 파일을 「문서/Bobos/내 효과음」 폴더로 복사해서 추가해요">+ 파일</button>
+        <button id="sfxRescan" type="button" class="ghost mini" title="폴더를 다시 읽어요 (새로 넣은 파일 반영)">↻</button>
+      </div>
+      <div id="sfxList" class="sfx-list" tabindex="0"></div>
+      <div id="sfxEmpty" class="sfx-empty" hidden></div>
+      <div class="sfx-bar">
+        <span id="sfxStatus"></span>
+        <label class="sfx-vol" title="미리듣기 볼륨"><svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor"><path d="M1 4.2h2.2L6 1.8v8.4L3.2 7.8H1z"/><path d="M8 3.6a3.2 3.2 0 0 1 0 4.8M9.4 2.2a5.2 5.2 0 0 1 0 7.6" stroke="currentColor" stroke-width="1" fill="none"/></svg><input id="sfxVol" type="range" min="0" max="100" value="80"></label>
+      </div>
+      <div id="sfxDrop" class="sfx-drop" hidden><div>여기에 놓으세요<small>폴더 = 목록에 추가 · 파일 = 「내 효과음」으로 복사</small></div></div>
+    </section>
+  </div>
+
+  <script src="js/license.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

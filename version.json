@@ -1,0 +1,18 @@
+{
+    "v":  "1.2.0",
+    "note":  "",
+    "min_loader":  1,
+    "files":  [
+                  "index.html",
+                  "css/memory-glass.css",
+                  "css/bobos.css",
+                  "js/license.js",
+                  "js/app.js",
+                  "js/linkimport.js",
+                  "js/tracker.js",
+                  "js/pin.js",
+                  "js/sfx-dict.js",
+                  "js/sfx.js",
+                  "jsx/host.jsx"
+              ]
+}
