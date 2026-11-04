@@ -6,6 +6,9 @@
  *   더블클릭은 클릭 두 번이라 e.detail로 구분: 첫 클릭(detail 1)에서 재생, 두 번째(detail 2)에서 삽입
  * - 키보드: ↑↓ 이동하며 미리듣기 · Enter 삽입 · Space 재생/정지 · Esc 정지
  * - 재생 못 하는 형식(AIFF 등 — Chromium은 AIFF를 못 읽음)은 ffmpeg로 임시 WAV를 만들어 재생
+ * - 즐겨찾기(1.2.1): 줄마다 ☆ 버튼, 빠른 검색 줄 맨 앞 [★ 즐겨찾기] = 즐겨찾기만 보기(검색어와 같이 써도 됨). 저장: settings.favs { 키: 넣은 시각 }
+ * - 태그·즐겨찾기 키(1.2.1~) = 「추가한 폴더 이름/그 안의 경로」 (예: 효과음팩/Cartoon/boing.wav). 같은 팩을 다른 PC·다른 드라이브에 풀어도 그대로 맞는다.
+ *   (예전 1.1.x 태그는 절대 경로 키 → 켤 때 한 번 자동으로 옮김. 이름이 같은 폴더 두 개를 추가하면 키가 겹칠 수 있음)
  * - 설정·태그: %APPDATA%\Bobos\sfx-settings.json · 목록: sfx-index.json (맥은 ~/Library/Application Support/Bobos) */
 (function () {
   'use strict';
@@ -38,6 +41,28 @@
   var settings = readJson(SETTINGS_F, {});
   settings.folders = settings.folders || [];
   settings.tags = settings.tags || {};
+  settings.favs = settings.favs || {};
+  // 1.1.x의 절대 경로 키 → 「폴더 이름/상대 경로」 키로 한 번 옮긴다
+  function keyFor(root, rel) { return (path.basename(root) + '/' + rel).replace(/\\/g, '/'); }
+  (function migrateKeys() {
+    var ABS = /^([a-zA-Z]:[\\\/]|[\\\/])/, changed = false;
+    function under(abs) {
+      var a = abs.replace(/\\/g, '/'), al = a.toLowerCase();
+      for (var i = 0; i < settings.folders.length; i++) {
+        var r = settings.folders[i].replace(/\\/g, '/').replace(/\/+$/, '');
+        if (al.indexOf(r.toLowerCase() + '/') === 0) { return keyFor(settings.folders[i], a.slice(r.length + 1)); }
+      }
+      return null;
+    }
+    ['tags', 'favs'].forEach(function (bag) {
+      Object.keys(settings[bag]).forEach(function (k) {
+        if (!ABS.test(k)) { return; }
+        var nk = under(k);
+        if (nk) { if (!(nk in settings[bag])) { settings[bag][nk] = settings[bag][k]; } delete settings[bag][k]; changed = true; }
+      });
+    });
+    if (changed) { writeJson(SETTINGS_F, settings); }
+  }());
   if (typeof settings.vol !== 'number') { settings.vol = 80; }
   function saveSettings() { writeJson(SETTINGS_F, settings); }
   var index = readJson(INDEX_F, { v: 1, roots: {} });
@@ -48,7 +73,7 @@
   function makeFile(root, rel) {
     var name = path.basename(rel), ext = path.extname(name).slice(1).toLowerCase();
     var folderLabel = path.basename(root) + '/' + rel;   // 최상위 폴더 이름도 검색에 넣는다 ("Cartoon SFX Pack")
-    return { abs: path.join(root, rel), rel: rel, root: root, name: name.replace(/\.[^.]+$/, ''), ext: ext, hay: S.haystack(folderLabel), nameHay: S.haystack(name), dur: null };
+    return { abs: path.join(root, rel), key: keyFor(root, rel), rel: rel, root: root, name: name.replace(/\.[^.]+$/, ''), ext: ext, hay: S.haystack(folderLabel), nameHay: S.haystack(name), dur: null };
   }
   function rebuild() {
     files = [];
@@ -157,8 +182,9 @@
   }
 
   // ---- 검색 + 목록 그리기
-  var results = [], shown = 0, sel = -1, query = '';
-  function tagsOf(f) { return settings.tags[f.abs] || ''; }
+  var results = [], shown = 0, sel = -1, query = '', favOnly = false;
+  function tagsOf(f) { return settings.tags[f.key] || ''; }
+  function isFav(f) { return !!settings.favs[f.key]; }
   function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function highlight(name, words) {
     var html = esc(name);
@@ -182,11 +208,13 @@
     // 검색어가 바뀌면(빠른 검색 버튼 [공포] → [두둥], 직접 입력, 지우기) 듣던 소리는 끈다 (1.1.1)
     if (lastQuery !== null && query !== lastQuery) { stop(); }
     lastQuery = query;
-    results = S.search(files, query, tagsOf);
+    results = S.search(favOnly ? files.filter(isFav) : files, query, tagsOf);
+    if (favOnly && !query) { results.sort(function (a, b) { return (settings.favs[b.f.key] || 0) - (settings.favs[a.f.key] || 0); }); }   // 즐겨찾기만 볼 땐 최근에 넣은 것부터
     shown = 0; sel = results.length ? 0 : -1;
     el.list.innerHTML = '';
     renderMore();
-    Array.prototype.forEach.call(el.chips.children, function (c) { c.className = 'sfx-chip' + (c.textContent === query ? ' on' : ''); });
+    Array.prototype.forEach.call(el.chips.children, function (c) { if (c !== favChip) { c.className = 'sfx-chip' + (c.textContent === query ? ' on' : ''); } });
+    updateFavChip();
     el.clear.hidden = !query;
     // 빈 화면 안내
     if (!settings.folders.length) {
@@ -195,6 +223,11 @@
     } else if (!files.length) {
       el.empty.innerHTML = scanning ? '<b>폴더 읽는 중…</b>' : '<b>효과음 파일이 없어요</b>추가한 폴더에 wav·mp3·aif·m4a 파일이 있는지 확인하세요.';
       el.empty.hidden = false;
+    } else if (favOnly && !results.length) {
+      el.empty.innerHTML = query
+        ? '<b>즐겨찾기 중엔 「' + esc(query) + '」에 맞는 효과음이 없어요</b>위의 <b>★ 즐겨찾기</b>를 끄면 전체에서 찾아요.'
+        : '<b>즐겨찾기가 아직 없어요</b>자주 쓰는 효과음 줄의 <b>☆</b>를 누르면 여기에 모여요.';
+      el.empty.hidden = false;
     } else if (!results.length) {
       el.empty.innerHTML = '<b>「' + esc(query) + '」에 맞는 효과음이 없어요</b>다른 말로 찾아보세요 (예: 슉 → 휙, whoosh).<br>찾은 효과음에 <b>#</b>으로 태그를 달아 두면 다음부터 바로 나와요.';
       el.empty.hidden = false;
@@ -202,7 +235,7 @@
     if (!scanning) {
       // 한/영 자판 실수로 바꿔 찾은 말이 있으면 알려 준다 (Eldyd → 띠용)
       var alts = query.split(/\s+/).map(function (t) { var a = S.altTerm(t); return a && /^[a-z]+$/i.test(t) ? t + ' → ' + a : null; }).filter(Boolean);
-      setStatus(files.length ? ((alts.length ? '한/영 바꿔 찾음: ' + alts.join(', ') + ' · ' : '') + '효과음 ' + files.length.toLocaleString() + '개' + (query ? ' · 결과 ' + results.length.toLocaleString() + '개' : '') + ' · 클릭 = 반복 재생, 더블클릭 = 타임라인에 넣기') : '');
+      setStatus(files.length ? ((alts.length ? '한/영 바꿔 찾음: ' + alts.join(', ') + ' · ' : '') + (favOnly ? '즐겨찾기 ' + Object.keys(settings.favs).length + '개' : '효과음 ' + files.length.toLocaleString() + '개') + (query ? ' · 결과 ' + results.length.toLocaleString() + '개' : '') + ' · 클릭 = 반복 재생, 더블클릭 = 타임라인에 넣기') : '');
     }
   }
   function renderMore() {
@@ -224,15 +257,30 @@
     row.className = 'sfx-row'; row.setAttribute('data-i', i);
     row.innerHTML = '<span class="sfx-ico"></span>' +
       '<div class="sfx-main"><div class="sfx-name">' + highlight(f.name, r.words) + '</div><div class="sfx-sub"></div></div>' +
-      '<span class="sfx-tags"></span><button type="button" class="sfx-tagbtn" title="태그 달기 — 이 효과음을 이 단어로 바로 찾게 해요">#</button>' +
+      '<span class="sfx-tags"></span><button type="button" class="sfx-favbtn" title="즐겨찾기"></button><button type="button" class="sfx-tagbtn" title="태그 달기 — 이 효과음을 이 단어로 바로 찾게 해요">#</button>' +
       '<div class="sfx-prog"></div>';
     row.querySelector('.sfx-sub').textContent = subText(f);
-    fillTags(row, f);
+    fillTags(row, f); fillFav(row, f);
     return row;
   }
   function fillTags(row, f) {
     var t = tagsOf(f), box = row.querySelector('.sfx-tags');
     box.textContent = t ? t.split(' ').map(function (x) { return '#' + x; }).join(' ') : '';
+  }
+  function fillFav(row, f) {
+    var on = isFav(f), b = row.querySelector('.sfx-favbtn');
+    row.classList.toggle('fav', on);
+    b.textContent = on ? '★' : '☆';
+    b.title = on ? '즐겨찾기에서 빼기' : '즐겨찾기에 넣기';
+  }
+  function toggleFav(i) {
+    var f = results[i].f, row = rowEl(i);
+    if (isFav(f)) { delete settings.favs[f.key]; } else { settings.favs[f.key] = Date.now(); }
+    saveSettings();
+    if (row) { fillFav(row, f); }
+    updateFavChip();
+    setStatus(isFav(f) ? '★ 즐겨찾기에 넣었어요 — ' + f.name : '즐겨찾기에서 뺐어요 — ' + f.name, 'ok');
+    // 즐겨찾기만 보는 중에 뺀 줄은 바로 사라지게 하지 않는다 (실수로 눌렀을 때 다시 누를 수 있게) — 다음 검색·새로고침 때 빠짐
   }
   function rowEl(i) { return el.list.querySelector('.sfx-row[data-i="' + i + '"]'); }
   function markRows() {
@@ -302,7 +350,7 @@
     if (p.tried) { setStatus('이 파일은 미리듣기를 할 수 없어요: ' + p.f.name, 'err'); return; }
     p.tried = true;
     var ff = findFfmpeg();
-    if (!ff) { setStatus('이 형식(' + p.f.ext + ')은 미리듣기에 ffmpeg가 필요해요 — 트래킹 탭의 [ffmpeg 설치]로 설치할 수 있어요', 'err'); return; }
+    if (!ff) { setStatus('이 형식(' + p.f.ext + ')은 미리듣기에 ffmpeg가 필요해요 — ffmpeg를 설치한 뒤 Premiere를 다시 켜 주세요', 'err'); return; }
     var dir = path.join(os.tmpdir(), 'bobos-sfx'), out = path.join(dir, crypto.createHash('sha1').update(p.abs).digest('hex').slice(0, 16) + '.wav');
     try { fs.mkdirSync(dir, { recursive: true }); } catch (e) {}
     var go = function () { if (playing === p) { audio.src = fileUrl(out); audio.play().catch(function () {}); } };
@@ -349,7 +397,7 @@
     function save() {
       var v = inp.value.toLowerCase().replace(/[#,]/g, ' ').split(/\s+/).filter(Boolean);
       v = v.filter(function (x, k) { return v.indexOf(x) === k; });
-      if (v.length) { settings.tags[f.abs] = v.join(' '); } else { delete settings.tags[f.abs]; }
+      if (v.length) { settings.tags[f.key] = v.join(' '); } else { delete settings.tags[f.key]; }
       saveSettings(); fillTags(row, f); box.parentNode.removeChild(box);
       setStatus(v.length ? '태그 저장: ' + v.map(function (x) { return '#' + x; }).join(' ') : '태그를 지웠어요', 'ok');
     }
@@ -364,6 +412,7 @@
     if (!row) { return; }
     var i = +row.getAttribute('data-i');
     if (e.target.classList.contains('sfx-tagbtn')) { editTags(i); return; }
+    if (e.target.classList.contains('sfx-favbtn')) { toggleFav(i); return; }
     select(i);
     if (e.detail >= 2) { insert(i); return; }                 // 더블클릭(두 번째 클릭) → 넣기
     var f = results[i].f;
@@ -377,6 +426,17 @@
     else if (e.key === 'Escape') { el.q.value = ''; refresh(); }
   });
   el.clear.addEventListener('click', function () { el.q.value = ''; refresh(); el.q.focus(); });
+  var favChip = document.createElement('span');
+  favChip.title = '즐겨찾기만 보기 (검색어와 같이 써도 돼요)';
+  favChip.addEventListener('click', function () { favOnly = !favOnly; settings.favOnly = favOnly; saveSettings(); stop(); refresh(); });
+  el.chips.appendChild(favChip);
+  function updateFavChip() {
+    var n = Object.keys(settings.favs).length;
+    favChip.className = 'sfx-chip sfx-favchip' + (favOnly ? ' on' : '');
+    favChip.textContent = '★ 즐겨찾기' + (n ? ' ' + n : '');
+  }
+  favOnly = !!settings.favOnly;
+  updateFavChip();
   S.CHIPS.forEach(function (c) {
     var b = document.createElement('span'); b.className = 'sfx-chip'; b.textContent = c;
     b.addEventListener('click', function () { el.q.value = el.q.value.trim() === c ? '' : c; refresh(); });

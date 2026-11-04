@@ -5,12 +5,18 @@
  * - 다시 돌아온 탭엔 resize 이벤트를 보내 트래킹 미리보기 크기를 다시 잰다(숨겨져 있는 동안엔 크기가 0) */
 (function () {
   'use strict';
+  /* ===== 기능 스위치 (1.2.1~) — 코드는 그대로 두고 켜고 끈다. 바꾼 뒤 업데이트올리기로 올리면 모두에게 반영 =====
+   *   tracking: 트래킹 탭 (js/tracker.js · js/pin.js · host.jsx의 Track_*)
+   *   license : 키 등록 화면·키 확인 (js/license.js). false면 키 없이 바로 쓰고, 머리의 "○○님 전용"도 숨김 */
+  var FEATURES = { tracking: false, license: false };
+
   var L = window.BobosLicense;
   var $ = function (id) { return document.getElementById(id); };
   var TAB_KEY = 'bobos_tab';
   var SCRIPTS = { li: ['js/linkimport.js'], pin: ['js/tracker.js', 'js/pin.js'], sfx: ['js/sfx-dict.js', 'js/sfx.js'] };
   var loaded = { li: false, pin: false, sfx: false };
   var current = null;
+  if (!FEATURES.tracking) { delete SCRIPTS.pin; delete loaded.pin; }
 
   function loadScripts(list, done) {
     var i = 0;
@@ -56,9 +62,15 @@
     $('gate').hidden = true;
     $('app').hidden = false;
     var owner = $('owner');
-    owner.textContent = (lic.n || '') + '님 전용';
-    owner.title = '키 정보 보기';
-    bindKeyPop(lic);
+    if (lic) {
+      owner.textContent = (lic.n || '') + '님 전용';
+      owner.title = '키 정보 보기';
+      bindKeyPop(lic);
+    } else { owner.hidden = true; }
+    if (!FEATURES.tracking) {   // 트래킹 끔: 탭 버튼·화면 숨김 (마지막으로 연 탭이 트래킹이었으면 activate가 링크 임포트로)
+      var pb = document.querySelector('.bb-tab[data-tab="pin"]'); if (pb) { pb.hidden = true; }
+      $('tab-pin').hidden = true;
+    }
     Array.prototype.forEach.call(document.querySelectorAll('.bb-tab'), function (b) {
       b.addEventListener('click', function () { if (b.getAttribute('data-tab') !== current) { activate(b.getAttribute('data-tab')); } });
     });
@@ -124,6 +136,7 @@
     });
   }
 
+  if (!FEATURES.license) { startApp(null); return; }
   if (!L) { showGate('node'); return; }
   var r = L.check();
   if (r.ok) { startApp(r.lic); } else { showGate(r.reason); }

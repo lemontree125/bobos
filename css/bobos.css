@@ -266,6 +266,13 @@ b { font-weight: 600; color: var(--mg-ink); }
 #tab-sfx .sfx-name mark { background: transparent; color: var(--mg-accent); font-weight: 600; }
 #tab-sfx .sfx-sub { font-size: 10.5px; color: var(--mg-ink-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 #tab-sfx .sfx-tags { flex: 0 1 auto; min-width: 0; max-width: 90px; font-size: 10.5px; color: var(--mg-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 즐겨찾기 (1.2.1) */
+#tab-sfx .sfx-favbtn { flex: 0 0 auto; padding: 1px 4px; font-size: 12px; line-height: 1; background: transparent; border-color: transparent; box-shadow: none; color: var(--mg-ink-faint); opacity: 0; }
+#tab-sfx .sfx-row:hover .sfx-favbtn, #tab-sfx .sfx-row.sel .sfx-favbtn, #tab-sfx .sfx-row.fav .sfx-favbtn { opacity: 1; }
+#tab-sfx .sfx-row.fav .sfx-favbtn { color: #ffc95c; }
+#tab-sfx .sfx-favbtn:hover:not(:disabled) { color: #ffc95c; background: var(--mg-glass-2); border-color: var(--mg-line-2); }
+#tab-sfx .sfx-favchip { color: #e9c06a; }
+#tab-sfx .sfx-favchip.on { background: rgba(255,201,92,.16); border-color: rgba(255,201,92,.45); color: #ffd98a; }
 #tab-sfx .sfx-tagbtn { flex: 0 0 auto; padding: 1px 6px; font-size: 11px; background: transparent; border-color: transparent; box-shadow: none; color: var(--mg-ink-faint); opacity: 0; }
 #tab-sfx .sfx-row:hover .sfx-tagbtn, #tab-sfx .sfx-row.sel .sfx-tagbtn { opacity: 1; }
 #tab-sfx .sfx-tagbtn:hover:not(:disabled) { color: var(--mg-ink); background: var(--mg-glass-2); border-color: var(--mg-line-2); }
